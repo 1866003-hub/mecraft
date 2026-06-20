@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>mecraft - 1.2.1 (Super Light)</title>
+    <title>mecraft - 1.2.2 (Perfect Controls)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #87CEEB; user-select: none; }
         canvas { display: block; }
@@ -12,33 +12,45 @@
             background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
             pointer-events: none;
         }
+        /* 画面中央のレティクル（照準） */
         #crosshair {
             position: absolute; top: 50%; left: 50%;
             width: 10px; height: 10px; transform: translate(-50%, -50%);
             color: white; font-family: sans-serif; font-size: 24px;
             pointer-events: none; user-select: none;
         }
+        /* ロックを促す案内（最初のクリック用） */
+        #blocker {
+            position: absolute; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex; justify-content: center; align-items: center;
+            color: white; font-family: sans-serif; font-size: 20px;
+            cursor: pointer;
+        }
     </style>
     <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
 </head>
 <body>
+    <div id="blocker">
+        <div>クリックして世界に入る (Escで解除)</div>
+    </div>
     <div id="info">
-        <h3>mecraft v1.2.1 (軽量化アプデ)</h3>
-        <p>操作: W/A/S/D = 移動 / ドラッグ = 視点変更</p>
-        <p>アクション: クリック = 破壊 / 右クリック = 設置</p>
+        <h3>mecraft v1.2.2</h3>
+        <p>操作: W/A/S/D = 移動 / マウスを動かす = 視点変更</p>
+        <p>アクション: 左クリック = 破壊 / 右クリック = 設置</p>
     </div>
     <div id="crosshair">+</div>
 
     <script>
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB); 
-        scene.fog = new THREE.FogExp2(0x87CEEB, 0.02); // 霧を少し濃くして処理を軽く
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.02);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(8, 10, 8); 
-        camera.rotation.order = 'YXZ';
 
-        const renderer = new THREE.WebGLRenderer({ antialias: false }); // アンチエイリアスOFFでさらに軽量化
+        const renderer = new THREE.WebGLRenderer({ antialias: false });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
@@ -47,6 +59,18 @@
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
         directionalLight.position.set(20, 40, 20);
         scene.add(directionalLight);
+
+        // --- ★新機能：本物のポインターロックコントロール ---
+        const controls = new THREE.PointerLockControls(camera, document.body);
+        const blocker = document.getElementById('blocker');
+
+        // 画面をクリックしたらマウスをロックしてゲーム開始
+        blocker.addEventListener('click', () => {
+            controls.lock();
+        });
+        // ロックされたら案内画面を消し、解除（Esc）されたら復活させる
+        controls.addEventListener('lock', () => { blocker.style.display = 'none'; });
+        controls.addEventListener('unlock', () => { blocker.style.display = 'flex'; });
 
         // --- ドット絵テクスチャ生成 ---
         function createCraftTexture(type) {
@@ -82,38 +106,30 @@
 
         const geometry = new THREE.BoxGeometry(1, 1, 1);
 
-        // --- ★超重要：軽量化のためのデータ構造 ---
-        const worldBlocks = {};     // ブロックの存在チェック用辞書: {"x_y_z": true}
-        const chunksLoaded = {};    // 生成済みチャンクの記録
+        // --- 軽量化無限ワールドデータ ---
+        const worldBlocks = {};
+        const chunksLoaded = {};
         const chunkSize = 16;
         
-        // ★大量のブロックを1回でまとめて描画するための「合体メッシュ」
-        // 最大10万個のブロックを扱えるように枠を確保
         const maxBlocks = 100000;
         const instancedMesh = new THREE.InstancedMesh(geometry, blockMaterials, maxBlocks);
         instancedMesh.count = 0;
         scene.add(instancedMesh);
 
-        // インスタンスのIDと座標を紐付ける辞書
         const instanceIdToKey = [];
         const keyToInstanceId = {};
 
-        // ブロックを追加する関数（高速版）
         function createBlock(x, y, z) {
             const key = `${x}_${y}_${z}`;
             if (worldBlocks[key]) return;
 
             worldBlocks[key] = true;
-
-            // 新しいブロックの位置を設定
             const dummy = new THREE.Object3D();
             dummy.position.set(x, y, z);
             dummy.updateMatrix();
 
             const id = instancedMesh.count;
             instancedMesh.setMatrixAt(id, dummy.matrix);
-            
-            // 紐付け情報を保存
             instanceIdToKey[id] = key;
             keyToInstanceId[key] = id;
 
@@ -121,7 +137,6 @@
             instancedMesh.instanceMatrix.needsUpdate = true;
         }
 
-        // ブロックを破壊する関数（高速版）
         function removeBlock(key) {
             if (!worldBlocks[key]) return;
 
@@ -129,7 +144,6 @@
             const lastId = instancedMesh.count - 1;
 
             if (id !== lastId) {
-                // 一番最後のブロックのデータを、消したいブロックの位置に上書きして詰める
                 const lastMatrix = new THREE.Matrix4();
                 instancedMesh.getMatrixAt(lastId, lastMatrix);
                 instancedMesh.setMatrixAt(id, lastMatrix);
@@ -139,14 +153,12 @@
                 instanceIdToKey[id] = lastKey;
             }
 
-            // データを削除
             delete worldBlocks[key];
             delete keyToInstanceId[key];
             instancedMesh.count--;
             instancedMesh.instanceMatrix.needsUpdate = true;
         }
 
-        // チャンク生成
         function loadChunk(chunkX, chunkZ) {
             const chunkKey = `${chunkX}_${chunkZ}`;
             if (chunksLoaded[chunkKey]) return;
@@ -168,8 +180,6 @@
         function updateChunks() {
             const pChunkX = Math.floor(camera.position.x / chunkSize);
             const pChunkZ = Math.floor(camera.position.z / chunkSize);
-            
-            // 周囲2×2チャンクを描画（重ければ描画半径を絞る）
             const r = 1;
             for (let x = -r; x <= r; x++) {
                 for (let z = -r; z <= r; z++) {
@@ -180,13 +190,14 @@
 
         // --- 破壊と設置 ---
         const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2(0, 0);
+        const mouse = new THREE.Vector2(0, 0); // 画面真ん中に固定
 
         function handleInteraction(isRightClick) {
+            if (!controls.isLocked) return; // 画面がロックされていない時は無視
+
             raycaster.setFromCamera(mouse, camera);
             raycaster.far = 6;
             
-            // InstancedMeshを対象に光線判定
             const intersects = raycaster.intersectObject(instancedMesh);
 
             if (intersects.length > 0) {
@@ -198,10 +209,8 @@
                 const coords = key.split('_').map(Number);
 
                 if (!isRightClick) {
-                    // 左クリック：破壊
                     removeBlock(key);
                 } else {
-                    // 右クリック：設置
                     const normal = hit.face.normal;
                     const newX = Math.round(coords[0] + normal.x);
                     const newY = Math.round(coords[1] + normal.y);
@@ -212,33 +221,10 @@
         }
 
         window.addEventListener('pointerdown', (e) => {
-            if (isDraggingAction) return;
-            if (e.button === 0) handleInteraction(false);
-            if (e.button === 2) handleInteraction(true);
+            if (e.button === 0) handleInteraction(false); // 左クリック破壊
+            if (e.button === 2) handleInteraction(true);  // 右クリック設置
         });
         window.addEventListener('contextmenu', e => e.preventDefault());
-
-        // --- 視点移動 ---
-        let isDragging = false;
-        let isDraggingAction = false;
-        let previousMousePosition = { x: 0, y: 0 };
-
-        window.addEventListener('mousedown', (e) => {
-            isDragging = true; isDraggingAction = false;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
-        window.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            const deltaX = e.clientX - previousMousePosition.x;
-            const deltaY = e.clientY - previousMousePosition.y;
-            if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) isDraggingAction = true;
-
-            camera.rotation.y -= deltaX * 0.003;
-            camera.rotation.x -= deltaY * 0.003;
-            camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
-        window.addEventListener('mouseup', () => { isDragging = false; });
 
         // --- キー移動 ---
         const keys = { w: false, a: false, s: false, d: false };
@@ -249,35 +235,32 @@
         function animate() {
             requestAnimationFrame(animate);
 
-            updateChunks();
+            if (controls.isLocked) {
+                updateChunks();
 
-            const speed = 0.15;
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-            forward.y = 0; forward.normalize();
-            right.y = 0; right.normalize();
+                const speed = 0.15;
+                // PointerLockControlsの正規の移動方法を使用（これでバグらない）
+                if (keys.w) controls.moveForward(speed);
+                if (keys.s) controls.moveForward(-speed);
+                if (keys.a) controls.moveRight(-speed);
+                if (keys.d) controls.moveRight(speed);
 
-            if (keys.w) camera.position.addScaledVector(forward, speed);
-            if (keys.s) camera.position.addScaledVector(forward, -speed);
-            if (keys.a) camera.position.addScaledVector(right, -speed);
-            if (keys.d) camera.position.addScaledVector(right, speed);
-
-            // 地面衝突判定（高速版）
-            const currentX = Math.round(camera.position.x);
-            const currentZ = Math.round(camera.position.z);
-            
-            let highestY = -999;
-            // プレイヤーの足元周辺の高さをチェック
-            for (let y = 10; y > -10; y--) {
-                if (worldBlocks[`${currentX}_${y}_${currentZ}`]) {
-                    highestY = y + 0.5;
-                    break;
+                // 地面衝突判定と目線の固定
+                const currentX = Math.round(camera.position.x);
+                const currentZ = Math.round(camera.position.z);
+                
+                let highestY = -999;
+                for (let y = 10; y > -10; y--) {
+                    if (worldBlocks[`${currentX}_${y}_${currentZ}`]) {
+                        highestY = y + 0.5;
+                        break;
+                    }
                 }
-            }
 
-            if (highestY !== -999) {
-                const targetY = highestY + 1.6;
-                camera.position.y += (targetY - camera.position.y) * 0.3;
+                if (highestY !== -999) {
+                    const targetY = highestY + 1.6;
+                    camera.position.y += (targetY - camera.position.y) * 0.3;
+                }
             }
 
             renderer.render(scene, camera);
