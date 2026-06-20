@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>mecraft - 1.2.4 (Fullscreen Fix)</title>
+    <title>mecraft - 1.2.5 (No-Lock Smooth Controls)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #87CEEB; user-select: none; }
         canvas { display: block; }
@@ -12,34 +12,21 @@
             background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
             pointer-events: none;
         }
+        /* 画面中央の照準 */
         #crosshair {
             position: absolute; top: 50%; left: 50%;
             width: 10px; height: 10px; transform: translate(-50%, -50%);
-            color: white; font-family: sans-serif; font-size: 24px;
+            color: rgba(210, 210, 210, 0.6); font-family: sans-serif; font-size: 24px;
             pointer-events: none; user-select: none;
         }
-        #blocker {
-            position: absolute; width: 100%; height: 100%;
-            background-color: rgba(20, 30, 40, 0.9);
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            color: white; font-family: sans-serif; cursor: pointer; z-index: 999;
-        }
-        .start-btn {
-            padding: 15px 30px; font-size: 22px; font-weight: bold; background: #55aa55;
-            color: white; border: 3px solid white; border-radius: 10px; box-shadow: 0 5px 0 #336633;
-        }
-        .start-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #336633; }
     </style>
     <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 </head>
 <body>
-    <div id="blocker">
-        <button class="start-btn" id="start-button">【ゲームを開始する】</button>
-        <p style="margin-top:20px; font-size:14px; color:#aaa;">※全画面モードになり、本家と同じマウス操作が始まります (Escで解除)</p>
-    </div>
     <div id="info">
-        <h3>mecraft v1.2.4</h3>
-        <p>操作: W/A/S/D = 移動 / マウス = 視点変更</p>
+        <h3>mecraft v1.2.5</h3>
+        <p>操作: W/A/S/D = 移動</p>
+        <p>視点: 画面内でマウスを動かすだけでキョロキョロ見渡せます！</p>
         <p>アクション: 左クリック = 破壊 / 右クリック = 設置</p>
     </div>
     <div id="crosshair">+</div>
@@ -50,7 +37,8 @@
         scene.fog = new THREE.FogExp2(0x87CEEB, 0.02);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(8, 10, 8); 
+        // 最初はちょっと高めの位置からスタート
+        camera.position.set(8, 12, 8); 
         camera.rotation.order = 'YXZ';
 
         const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -63,49 +51,19 @@
         directionalLight.position.set(20, 40, 20);
         scene.add(directionalLight);
 
-        // --- ★超絶強化：フルスクリーン併用型ポインターロック ---
-        let isLocked = false;
-        const blocker = document.getElementById('blocker');
-        const startButton = document.getElementById('start-button');
+        // --- ★新・視点移動システム（マウスロック不要でぬるぬる動く） ---
+        let targetRotationY = 0;
+        let targetRotationX = 0;
 
-        startButton.addEventListener('click', (e) => {
-            e.stopPropagation(); // 誤作動防止
+        // 画面の真ん中からのマウスのズレを計算して、カメラの角度を決める
+        window.addEventListener('mousemove', (e) => {
+            // 画面中央を「0」とした時の、現在のマウス位置（-1.0 〜 1.0）
+            const mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+            const mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
 
-            // Chromebookのブラウザを納得させるために、まず画面を強制的に「フルスクリーン化」する
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().then(() => {
-                    // フルスクリーン化が成功した直後に、間髪入れずにマウスをロックする
-                    setTimeout(() => {
-                        document.body.requestPointerLock();
-                    }, 100);
-                }).catch(err => {
-                    // もしフルスクリーンが拒否されても、マウスロックだけは試みる
-                    document.body.requestPointerLock();
-                });
-            } else {
-                document.body.requestPointerLock();
-            }
-        });
-
-        // ロック＆解除の状態変化を確実にキャッチする
-        const lockChange = () => {
-            if (document.pointerLockElement === document.body || document.fullscreenElement !== null) {
-                isLocked = true;
-                blocker.style.display = 'none';
-            } else {
-                isLocked = false;
-                blocker.style.display = 'flex';
-            }
-        };
-        document.addEventListener('pointerlockchange', lockChange);
-        document.addEventListener('fullscreenchange', lockChange);
-
-        // マウス移動による視点変更
-        document.addEventListener('mousemove', (e) => {
-            if (!isLocked) return;
-            camera.rotation.y -= e.movementX * 0.0025;
-            camera.rotation.x -= e.movementY * 0.0025;
-            camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
+            // マウスの位置に応じて、向きたい角度を計算
+            targetRotationY = -mouseX * Math.PI * 1.5; // 横に大きく見回せる
+            targetRotationX = mouseY * Math.PI * 0.4;   // 上下を見上げ・見下ろし
         });
 
         // --- ドット絵テクスチャ生成 ---
@@ -224,15 +182,17 @@
             }
         }
 
-        // --- 破壊と設置 ---
+        // --- 破壊と設置（画面上のマウス座標から光線を飛ばすように変更） ---
         const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2(0, 0);
+        const mouseVec = new THREE.Vector2();
 
-        function handleInteraction(isRightClick) {
-            if (!isLocked) return;
+        function handleInteraction(e, isRightClick) {
+            // クリックした瞬間の画面上のマウス位置を取得
+            mouseVec.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouseVec.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
-            raycaster.setFromCamera(mouse, camera);
-            raycaster.far = 6;
+            raycaster.setFromCamera(mouseVec, camera);
+            raycaster.far = 7;
             
             const intersects = raycaster.intersectObject(instancedMesh);
 
@@ -257,8 +217,8 @@
         }
 
         window.addEventListener('pointerdown', (e) => {
-            if (e.button === 0) handleInteraction(false);
-            if (e.button === 2) handleInteraction(true);
+            if (e.button === 0) handleInteraction(e, false); // 左クリック破壊
+            if (e.button === 2) handleInteraction(e, true);  // 右クリック設置
         });
         window.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -271,36 +231,39 @@
         function animate() {
             requestAnimationFrame(animate);
 
-            if (isLocked) {
-                updateChunks();
+            // 視線を目標値に向けてスムーズに近づける（ぬるぬるカメラ）
+            camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.1;
+            camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.1;
 
-                const speed = 0.15;
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-                forward.y = 0; forward.normalize();
-                right.y = 0; right.normalize();
+            updateChunks();
 
-                if (keys.w) camera.position.addScaledVector(forward, speed);
-                if (keys.s) camera.position.addScaledVector(forward, -speed);
-                if (keys.a) camera.position.addScaledVector(right, -speed);
-                if (keys.d) camera.position.addScaledVector(right, speed);
+            // 移動スピード
+            const speed = 0.15;
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            forward.y = 0; forward.normalize();
+            right.y = 0; right.normalize();
 
-                // 地面衝突判定
-                const currentX = Math.round(camera.position.x);
-                const currentZ = Math.round(camera.position.z);
-                
-                let highestY = -999;
-                for (let y = 10; y > -10; y--) {
-                    if (worldBlocks[`${currentX}_${y}_${currentZ}`]) {
-                        highestY = y + 0.5;
-                        break;
-                    }
+            if (keys.w) camera.position.addScaledVector(forward, speed);
+            if (keys.s) camera.position.addScaledVector(forward, -speed);
+            if (keys.a) camera.position.addScaledVector(right, -speed);
+            if (keys.d) camera.position.addScaledVector(right, speed);
+
+            // 地面衝突判定
+            const currentX = Math.round(camera.position.x);
+            const currentZ = Math.round(camera.position.z);
+            
+            let highestY = -999;
+            for (let y = 12; y > -10; y--) {
+                if (worldBlocks[`${currentX}_${y}_${currentZ}`]) {
+                    highestY = y + 0.5;
+                    break;
                 }
+            }
 
-                if (highestY !== -999) {
-                    const targetY = highestY + 1.6;
-                    camera.position.y += (targetY - camera.position.y) * 0.3;
-                }
+            if (highestY !== -999) {
+                const targetY = highestY + 1.6;
+                camera.position.y += (targetY - camera.position.y) * 0.2; // 自然に着地
             }
 
             renderer.render(scene, camera);
