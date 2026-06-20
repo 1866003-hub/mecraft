@@ -2,13 +2,13 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>mecraft - 1.1.2 (Free Camera)</title>
+    <title>mecraft - 1.1.4 (Real Walk)</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; }
         canvas { display: block; }
         #info {
             position: absolute; top: 10px; left: 10px;
-            color: white; font-family: sans-serif; font-size: 16px;
+            color: white; font-family: sans-serif; font-size: 14px;
             background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
         }
     </style>
@@ -16,33 +16,33 @@
 </head>
 <body>
     <div id="info">
-        <h3>mecraft v1.1.2</h3>
-        <p>操作: 矢印キー (↑↓←→) = カメラ移動</p>
+        <h3>mecraft v1.1.4</h3>
+        <p>操作: W(前) / A(左) / S(後) / D(右)</p>
+        <p>※動かない時は、一度画面のどこでも良いのでクリックしてください！</p>
     </div>
 
     <script>
-        // 1. シーンとカメラの作成
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB); 
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(8, 12, 25); // 地形全体が見下ろせる位置
+        // 最初はちょっと高めの位置からスタートして着地させる
+        camera.position.set(8, 6, 12); 
 
-        // 2. レンダーの作成
         const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // 3. ライトの設定
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(10, 20, 15);
         scene.add(directionalLight);
 
-        // 4. 16×16の凸凹した地面を作る
+        // --- 16×16の凸凹した地面を作り、高さを記録する ---
         const geometry = new THREE.BoxGeometry(1, 1, 1);
         const material = new THREE.MeshLambertMaterial({ color: 0x55aa55 });
+        const heightMap = {};
 
         const chunkSize = 16;
         for (let x = 0; x < chunkSize; x++) {
@@ -51,26 +51,58 @@
                 const height = Math.floor(Math.sin(x * 0.5) * 2 + Math.cos(z * 0.5) * 2);
                 cube.position.set(x, height, z);
                 scene.add(cube);
+
+                // ブロックの上面（足場になる高さ）を保存
+                heightMap[`${x}_${z}`] = height + 0.5;
             }
         }
 
-        // 5. キーボード操作（矢印キーでカメラ位置を変更）
-        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-        window.addEventListener('keydown', (e) => { if(e.key in keys) keys[e.key] = true; });
-        window.addEventListener('keyup', (e) => { if(e.key in keys) keys[e.key] = false; });
+        // --- キーボード入力の管理（WASD対応） ---
+        const keys = { w: false, a: false, s: false, d: false };
+        
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key in keys) keys[key] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key in keys) keys[key] = false;
+        });
 
-        // 6. アニメーションループ
+        // カメラの初期設定：ちょっと斜め下（地面）を見下ろすように固定
+        camera.rotation.set(-0.3, 0, 0);
+
+        // アニメーションループ
         function animate() {
             requestAnimationFrame(animate);
 
-            // 矢印キーが押されている間、カメラを動かす
-            if (keys.ArrowUp)    camera.position.z -= 0.5;
-            if (keys.ArrowDown)  camera.position.z += 0.5;
-            if (keys.ArrowLeft)  camera.position.x -= 0.5;
-            if (keys.ArrowRight) camera.position.x += 0.5;
+            // 移動スピード
+            const speed = 0.15;
 
-            // 常に地形の中心（8, 0, 8）をロックオンして見つめる
-            camera.lookAt(8, 0, 8);
+            // 前後左右への移動（カメラの向きに依存しないシンプルなXZ軸移動）
+            if (keys.w) camera.position.z -= speed;
+            if (keys.s) camera.position.z += speed;
+            if (keys.a) camera.position.x -= speed;
+            if (keys.d) camera.position.x += speed;
+
+            // --- ★地に足をつける（衝突判定と重力） ---
+            // プレイヤーが現在いるXZマスの座標
+            const currentX = Math.round(camera.position.x);
+            const currentZ = Math.round(camera.position.z);
+            const mapKey = `${currentX}_${currentZ}`;
+
+            // 地面のデータが存在する場合
+            if (heightMap[mapKey] !== undefined) {
+                // 目線の高さ（地面の高さ + マイクラの身長1.6マス）
+                const targetY = heightMap[mapKey] + 1.6;
+                // フワッと自然に上下させる（簡易重力）
+                camera.position.y += (targetY - camera.position.y) * 0.3;
+            } else {
+                // チャンクの外（世界の果て）に落ちたら上に戻す
+                if (camera.position.y < -10) {
+                    camera.position.set(8, 6, 12);
+                }
+            }
 
             renderer.render(scene, camera);
         }
