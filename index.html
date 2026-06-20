@@ -2,23 +2,24 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>mecraft - 1.1.4 (Real Walk)</title>
+    <title>mecraft - 1.1.5 (Drag Rotation)</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #87CEEB; }
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; user-select: none; }
         canvas { display: block; }
         #info {
             position: absolute; top: 10px; left: 10px;
             color: white; font-family: sans-serif; font-size: 14px;
             background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
+            pointer-events: none;
         }
     </style>
     <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 </head>
 <body>
     <div id="info">
-        <h3>mecraft v1.1.4</h3>
-        <p>操作: W(前) / A(左) / S(後) / D(右)</p>
-        <p>※動かない時は、一度画面のどこでも良いのでクリックしてください！</p>
+        <h3>mecraft v1.1.5</h3>
+        <p>操作: W/A/S/D = 移動</p>
+        <p>視点: 画面をドラッグ（クリックしながら動かす）して見渡す</p>
     </div>
 
     <script>
@@ -26,8 +27,10 @@
         scene.background = new THREE.Color(0x87CEEB); 
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // 最初はちょっと高めの位置からスタートして着地させる
         camera.position.set(8, 6, 12); 
+
+        // カメラの回転順序を「Y軸（横振り）の後にX軸（縦振り）」に固定して、画面が斜めに傾くのを防ぐ
+        camera.rotation.order = 'YXZ';
 
         const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -39,7 +42,7 @@
         directionalLight.position.set(10, 20, 15);
         scene.add(directionalLight);
 
-        // --- 16×16の凸凹した地面を作り、高さを記録する ---
+        // --- 16×16の地面作成 ---
         const geometry = new THREE.BoxGeometry(1, 1, 1);
         const material = new THREE.MeshLambertMaterial({ color: 0x55aa55 });
         const heightMap = {};
@@ -51,15 +54,40 @@
                 const height = Math.floor(Math.sin(x * 0.5) * 2 + Math.cos(z * 0.5) * 2);
                 cube.position.set(x, height, z);
                 scene.add(cube);
-
-                // ブロックの上面（足場になる高さ）を保存
                 heightMap[`${x}_${z}`] = height + 0.5;
             }
         }
 
-        // --- キーボード入力の管理（WASD対応） ---
-        const keys = { w: false, a: false, s: false, d: false };
+        // --- ★新機能：ドラッグによる視点移動システム ---
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        window.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            // 前回からのマウスの移動量を計算
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+
+            // マウスの移動をカメラの回転に変換（0.003は感度調整）
+            camera.rotation.y -= deltaX * 0.003; // 左右を見渡す
+            camera.rotation.x -= deltaY * 0.003; // 上下を見上げる・見下ろす
+
+            // 真上や真後ろを向いて画面がバグるのを防ぐ（上下の限界設定）
+            camera.rotation.x = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, camera.rotation.x));
+
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mouseup', () => { isDragging = false; });
         
+        // --- キーボード入力の管理（WASD） ---
+        const keys = { w: false, a: false, s: false, d: false };
         window.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
             if (key in keys) keys[key] = true;
@@ -69,39 +97,35 @@
             if (key in keys) keys[key] = false;
         });
 
-        // カメラの初期設定：ちょっと斜め下（地面）を見下ろすように固定
-        camera.rotation.set(-0.3, 0, 0);
-
         // アニメーションループ
         function animate() {
             requestAnimationFrame(animate);
 
-            // 移動スピード
-            const speed = 0.15;
+            const speed = 0.12;
+            
+            // ★カメラの「向いている方向」を基準にして進むようにパワーアップ！
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            
+            // Y軸（上下）の移動成分を消して、地面を水平に歩くようにする
+            forward.y = 0; forward.normalize();
+            right.y = 0; right.normalize();
 
-            // 前後左右への移動（カメラの向きに依存しないシンプルなXZ軸移動）
-            if (keys.w) camera.position.z -= speed;
-            if (keys.s) camera.position.z += speed;
-            if (keys.a) camera.position.x -= speed;
-            if (keys.d) camera.position.x += speed;
+            if (keys.w) camera.position.addScaledVector(forward, speed);
+            if (keys.s) camera.position.addScaledVector(forward, -speed);
+            if (keys.a) camera.position.addScaledVector(right, -speed);
+            if (keys.d) camera.position.addScaledVector(right, speed);
 
-            // --- ★地に足をつける（衝突判定と重力） ---
-            // プレイヤーが現在いるXZマスの座標
+            // 地面に足を乗せる処理
             const currentX = Math.round(camera.position.x);
             const currentZ = Math.round(camera.position.z);
             const mapKey = `${currentX}_${currentZ}`;
 
-            // 地面のデータが存在する場合
             if (heightMap[mapKey] !== undefined) {
-                // 目線の高さ（地面の高さ + マイクラの身長1.6マス）
                 const targetY = heightMap[mapKey] + 1.6;
-                // フワッと自然に上下させる（簡易重力）
                 camera.position.y += (targetY - camera.position.y) * 0.3;
             } else {
-                // チャンクの外（世界の果て）に落ちたら上に戻す
-                if (camera.position.y < -10) {
-                    camera.position.set(8, 6, 12);
-                }
+                if (camera.position.y < -10) camera.position.set(8, 6, 12);
             }
 
             renderer.render(scene, camera);
