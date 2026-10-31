@@ -2,279 +2,1068 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>mecraft - 1.2.5 (No-Lock Smooth Controls)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft AI PvP Arena Prototype 0.1</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #87CEEB; user-select: none; }
-        canvas { display: block; }
-        #info {
-            position: absolute; top: 10px; left: 10px;
-            color: white; font-family: sans-serif; font-size: 14px;
-            background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace, sans-serif;
+            color: #fff;
+        }
+        #game-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        /* Minecraft UI Style */
+        .mc-panel {
+            background: rgba(0, 0, 0, 0.65);
+            border: 4px solid #3c3c3c;
+            box-shadow: inset -4px -4px 0px 0px #1e1e1e, inset 4px 4px 0px 0px #5a5a5a;
+            padding: 16px;
+            image-rendering: pixelated;
+        }
+
+        .mc-button {
+            background: #707070;
+            border: 3px solid #000;
+            box-shadow: inset -3px -3px 0px 0px #404040, inset 3px 3px 0px 0px #a0a0a0;
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: bold;
+            padding: 10px 20px;
+            cursor: pointer;
+            text-align: center;
+            text-shadow: 2px 2px #000;
+            transition: background 0.1s;
+            margin: 5px;
+            display: inline-block;
+        }
+        .mc-button:hover {
+            background: #8b8b8b;
+        }
+        .mc-button:active {
+            box-shadow: inset 3px 3px 0px 0px #404040, inset -3px -3px 0px 0px #a0a0a0;
+        }
+
+        /* Overlay screens */
+        #menu-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        
+        #menu-screen h1 {
+            font-size: 38px;
+            color: #ffff55;
+            text-shadow: 3px 3px #3f3f00;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        #hud {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+        }
+
+        /* Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 16px; height: 16px;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 2px #000;
+        }
+        #crosshair::before { top: 7px; left: 0; width: 16px; height: 2px; }
+        #crosshair::after { top: 0; left: 7px; width: 2px; height: 16px; }
+
+        /* Hearts Health Display */
+        .hud-bottom {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+        .hearts-container {
+            display: flex;
+            gap: 4px;
+            background: rgba(0,0,0,0.4);
+            padding: 6px 12px;
+            border-radius: 4px;
+        }
+        .heart {
+            font-size: 24px;
+            line-height: 1;
+            filter: drop-shadow(2px 2px 0px #000);
+        }
+
+        /* Stats Overlay */
+        .stats-box {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            font-size: 16px;
+            text-shadow: 2px 2px #000;
+        }
+
+        .controls-info {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 13px;
+            text-shadow: 2px 2px #000;
+            text-align: right;
+            line-height: 1.5;
+        }
+
+        #combat-log {
+            position: absolute;
+            bottom: 70px;
+            left: 20px;
+            font-size: 14px;
+            text-shadow: 2px 2px #000;
+            max-height: 150px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column-reverse;
+        }
+        .log-entry { margin-top: 3px; }
+
+        /* Red damage vignette */
+        #damage-flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 60%, rgba(255,0,0,0.6) 100%);
+            opacity: 0;
+            transition: opacity 0.1s ease-out;
             pointer-events: none;
         }
-        /* 画面中央の照準 */
-        #crosshair {
-            position: absolute; top: 50%; left: 50%;
-            width: 10px; height: 10px; transform: translate(-50%, -50%);
-            color: rgba(210, 210, 210, 0.6); font-family: sans-serif; font-size: 24px;
-            pointer-events: none; user-select: none;
-        }
     </style>
-    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+    <!-- Three.js (軽量3Dグラフィックライブラリ) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-    <div id="info">
-        <h3>mecraft v1.2.5</h3>
-        <p>操作: W/A/S/D = 移動</p>
-        <p>視点: 画面内でマウスを動かすだけでキョロキョロ見渡せます！</p>
-        <p>アクション: 左クリック = 破壊 / 右クリック = 設置</p>
+
+<div id="game-container">
+    <div id="damage-flash"></div>
+
+    <!-- スタート画面 / メニュー -->
+    <div id="menu-screen">
+        <div class="mc-panel" style="text-align: center; max-width: 500px;">
+            <h1>MINECRAFT AI PvP</h1>
+            <p style="color: #aaa; margin-bottom: 20px;">Prototype 0.1 (16x16 Pixel Texture)</p>
+
+            <div style="margin-bottom: 20px;">
+                <button class="mc-button" onclick="startGame('1v1')">1対1 対戦 (1v1)</button><br>
+                <button class="mc-button" onclick="startGame('team')">チーム戦 (2v2)</button>
+            </div>
+
+            <div style="font-size: 13px; color: #ddd; text-align: left; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 4px;">
+                <b>操作方法:</b><br>
+                ・WASD : 移動<br>
+                ・Space : ジャンプ（落下中攻撃で💥クリティカル!）<br>
+                ・マウス : 視点移動 (クリックで固定)<br>
+                ・左クリック : 剣攻撃 (ハート1個ダメージ)<br>
+                ・Esc : 視点解除
+            </div>
+        </div>
     </div>
-    <div id="crosshair">+</div>
 
-    <script>
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB); 
-        scene.fog = new THREE.FogExp2(0x87CEEB, 0.02);
+    <!-- HUD (戦闘中UI) -->
+    <div id="hud">
+        <div id="crosshair"></div>
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // 最初はちょっと高めの位置からスタート
-        camera.position.set(8, 12, 8); 
-        camera.rotation.order = 'YXZ';
+        <div class="stats-box mc-panel">
+            <div id="mode-display" style="color: #ffff55;">MODE: 1v1</div>
+            <div>撃破数 (Kills): <span id="kill-count" style="color: #55ff55;">0</span></div>
+            <div>生存BOT: <span id="alive-count" style="color: #ff5555;">0</span></div>
+        </div>
 
-        const renderer = new THREE.WebGLRenderer({ antialias: false });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        <div class="controls-info mc-panel">
+            WASD: 移動 | Space: ジャンプ<br>
+            左クリック: 攻撃 | ESC: マウス解除
+        </div>
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        directionalLight.position.set(20, 40, 20);
-        scene.add(directionalLight);
+        <div id="combat-log"></div>
 
-        // --- ★新・視点移動システム（マウスロック不要でぬるぬる動く） ---
-        let targetRotationY = 0;
-        let targetRotationX = 0;
+        <div class="hud-bottom">
+            <div id="hearts-bar" class="hearts-container">
+                <!-- Heart icons generated by JS -->
+            </div>
+            <div style="font-size: 12px; text-shadow: 1px 1px #000; color: #ccc;">PLAYER HEALTH</div>
+        </div>
+    </div>
+</div>
 
-        // 画面の真ん中からのマウスのズレを計算して、カメラの角度を決める
-        window.addEventListener('mousemove', (e) => {
-            // 画面中央を「0」とした時の、現在のマウス位置（-1.0 〜 1.0）
-            const mouseX = (e.clientX / window.innerWidth) * 2 - 1;
-            const mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+<script>
+/**
+ * 16x16 Pixel Art Texture Generator
+ */
+const TextureGen = {
+    createCanvas() {
+        const cvs = document.createElement('canvas');
+        cvs.width = 16;
+        cvs.height = 16;
+        return { cvs, ctx: cvs.getContext('2d') };
+    },
 
-            // マウスの位置に応じて、向きたい角度を計算
-            targetRotationY = -mouseX * Math.PI * 1.5; // 横に大きく見回せる
-            targetRotationX = mouseY * Math.PI * 0.4;   // 上下を見上げ・見下ろし
-        });
+    // Grass Top
+    grassTop() {
+        const { cvs, ctx } = this.createCanvas();
+        ctx.fillStyle = '#5c8e32'; ctx.fillRect(0, 0, 16, 16);
+        for(let i=0; i<30; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#4d7828' : '#6ba03b';
+            ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*16), 1, 1);
+        }
+        return new THREE.CanvasTexture(cvs);
+    },
 
-        // --- ドット絵テクスチャ生成 ---
-        function createCraftTexture(type) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 16; canvas.height = 16;
-            const ctx = canvas.getContext('2d');
-            for(let x=0; x<16; x++) {
-                for(let y=0; y<16; y++) {
-                    if (type === 'grass') {
-                        ctx.fillStyle = `rgb(50, ${130 + Math.floor(Math.random() * 50)}, 40)`;
-                    } else {
-                        const r = 90 + Math.floor(Math.random() * 30);
-                        ctx.fillStyle = `rgb(${r}, ${r*0.7}, ${r*0.5})`;
+    // Grass Side
+    grassSide() {
+        const { cvs, ctx } = this.createCanvas();
+        ctx.fillStyle = '#866043'; ctx.fillRect(0, 0, 16, 16);
+        for(let x=0; x<16; x++) for(let y=4; y<16; y++) {
+            if(Math.random() > 0.6) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#735135' : '#9c704e';
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }
+        ctx.fillStyle = '#5c8e32'; ctx.fillRect(0, 0, 16, 4);
+        for(let x=0; x<16; x++) {
+            const h = Math.floor(Math.random()*3);
+            ctx.fillRect(x, 4, 1, h);
+        }
+        return new THREE.CanvasTexture(cvs);
+    },
+
+    // Dirt
+    dirt() {
+        const { cvs, ctx } = this.createCanvas();
+        ctx.fillStyle = '#866043'; ctx.fillRect(0, 0, 16, 16);
+        for(let x=0; x<16; x++) for(let y=0; y<16; y++) {
+            if(Math.random() > 0.5) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#735135' : '#9c704e';
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }
+        return new THREE.CanvasTexture(cvs);
+    },
+
+    // Cobblestone / Wall
+    cobble() {
+        const { cvs, ctx } = this.createCanvas();
+        ctx.fillStyle = '#737373'; ctx.fillRect(0, 0, 16, 16);
+        for(let x=0; x<16; x++) for(let y=0; y<16; y++) {
+            if(Math.random() > 0.4) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#525252' : '#8a8a8a';
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }
+        return new THREE.CanvasTexture(cvs);
+    },
+
+    // Wood Log
+    logSide() {
+        const { cvs, ctx } = this.createCanvas();
+        ctx.fillStyle = '#675231'; ctx.fillRect(0, 0, 16, 16);
+        for(let y=0; y<16; y++) {
+            if(y % 3 === 0) {
+                ctx.fillStyle = '#493921'; ctx.fillRect(0, y, 16, 1);
+            }
+        }
+        return new THREE.CanvasTexture(cvs);
+    },
+
+    // Skin Texture (Steve / Zombie)
+    skin(type = 'steve') {
+        const { cvs, ctx } = this.createCanvas();
+        const baseColor = type === 'zombie' ? '#497637' : (type === 'alex' ? '#e2a17c' : '#c68a5c');
+        ctx.fillStyle = baseColor; ctx.fillRect(0,0,16,16);
+
+        // Eyes
+        if(type === 'zombie') {
+            ctx.fillStyle = '#000'; ctx.fillRect(3, 6, 3, 2); ctx.fillRect(10, 6, 3, 2);
+        } else {
+            ctx.fillStyle = '#fff'; ctx.fillRect(3, 6, 4, 2); ctx.fillRect(9, 6, 4, 2);
+            ctx.fillStyle = type === 'alex' ? '#4682b4' : '#2b2b8e';
+            ctx.fillRect(5, 6, 2, 2); ctx.fillRect(9, 6, 2, 2);
+        }
+        // Mouth/Nose
+        ctx.fillStyle = type === 'zombie' ? '#2d4d20' : '#a1653f';
+        ctx.fillRect(6, 10, 4, 2);
+
+        // Hair
+        ctx.fillStyle = type === 'alex' ? '#af4814' : (type === 'zombie' ? '#355627' : '#49301a');
+        ctx.fillRect(0, 0, 16, 4);
+
+        return new THREE.CanvasTexture(cvs);
+    },
+
+    // Clothes
+    shirt(color) {
+        const { cvs, ctx } = this.createCanvas();
+        ctx.fillStyle = color; ctx.fillRect(0,0,16,16);
+        for(let i=0; i<20; i++) {
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*16), 1, 1);
+        }
+        return new THREE.CanvasTexture(cvs);
+    },
+
+    // Iron Sword
+    sword() {
+        const { cvs, ctx } = this.createCanvas();
+        ctx.clearRect(0,0,16,16);
+        // Blade
+        ctx.fillStyle = '#e0e0e0';
+        for(let i=0; i<9; i++) ctx.fillRect(14-i, i, 2, 2);
+        ctx.fillStyle = '#ffffff';
+        for(let i=0; i<9; i++) ctx.fillRect(14-i, i, 1, 1);
+        // Guard
+        ctx.fillStyle = '#5c4033'; ctx.fillRect(4, 10, 3, 3);
+        // Handle
+        ctx.fillStyle = '#3d281e'; ctx.fillRect(2, 12, 3, 3);
+        return new THREE.CanvasTexture(cvs);
+    }
+};
+
+// Texture Sharpness Fix
+function applyPixelArtFilter(texture) {
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    return texture;
+}
+
+// Global Variables
+let scene, camera, renderer;
+let gameMode = '1v1';
+let isGameRunning = false;
+let clock = new THREE.Clock();
+
+// Player State
+const player = {
+    hp: 20,
+    maxHp: 20,
+    kills: 0,
+    position: new THREE.Vector3(0, 1.55, 10),
+    velocity: new THREE.Vector3(),
+    rotation: { yaw: 0, pitch: 0 },
+    onGround: true,
+    attackCooldown: 0,
+    team: 'blue',
+    armRig: null,
+    swordMesh: null,
+    isSwinging: false,
+    swingProgress: 0
+};
+
+// Entities (Bots)
+let bots = [];
+let arenaSize = 32;
+
+// Key state
+const keys = {};
+
+// Setup Three.js Scene
+function initEngine() {
+    const container = document.getElementById('game-container');
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.FogExp2(0x87ceeb, 0.025);
+
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+    renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+    sun.position.set(20, 40, 20);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 1024;
+    sun.shadow.mapSize.height = 1024;
+    scene.add(sun);
+
+    createArena();
+    createPlayerFPSArm();
+
+    // Event Listeners
+    window.addEventListener('resize', onWindowResize);
+    document.addEventListener('keydown', (e) => { keys[e.code] = true; });
+    document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mousedown', (e) => {
+        if (e.button === 0 && isGameRunning) {
+            if (document.pointerLockElement !== document.body) {
+                document.body.requestPointerLock();
+            } else {
+                playerAttack();
+            }
+        }
+    });
+}
+
+// Build Arena Map
+function createArena() {
+    const grassTop = applyPixelArtFilter(TextureGen.grassTop());
+    const grassSide = applyPixelArtFilter(TextureGen.grassSide());
+    const dirt = applyPixelArtFilter(TextureGen.dirt());
+    const cobble = applyPixelArtFilter(TextureGen.cobble());
+    const logSide = applyPixelArtFilter(TextureGen.logSide());
+
+    const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+
+    // Materials
+    const grassMat = [
+        new THREE.MeshLambertMaterial({ map: grassSide }),
+        new THREE.MeshLambertMaterial({ map: grassSide }),
+        new THREE.MeshLambertMaterial({ map: grassTop }),
+        new THREE.MeshLambertMaterial({ map: dirt }),
+        new THREE.MeshLambertMaterial({ map: grassSide }),
+        new THREE.MeshLambertMaterial({ map: grassSide })
+    ];
+    const wallMat = new THREE.MeshLambertMaterial({ map: cobble });
+    const logMat = new THREE.MeshLambertMaterial({ map: logSide });
+
+    // Ground Floor
+    const half = arenaSize / 2;
+    for (let x = -half; x <= half; x++) {
+        for (let z = -half; z <= half; z++) {
+            const block = new THREE.Mesh(blockGeo, grassMat);
+            block.position.set(x, -0.5, z);
+            block.receiveShadow = true;
+            scene.add(block);
+
+            // Outer Walls
+            if (Math.abs(x) === half || Math.abs(z) === half) {
+                for (let y = 1; y <= 3; y++) {
+                    const wallBlock = new THREE.Mesh(blockGeo, wallMat);
+                    wallBlock.position.set(x, y - 0.5, z);
+                    wallBlock.castShadow = true;
+                    wallBlock.receiveShadow = true;
+                    scene.add(wallBlock);
+                }
+            }
+        }
+    }
+
+    // Obstacles
+    const pillarPositions = [
+        [-5, -5], [5, -5], [-5, 5], [5, 5], [0, 0]
+    ];
+    pillarPositions.forEach(([px, pz]) => {
+        for (let y = 1; y <= 3; y++) {
+            const log = new THREE.Mesh(blockGeo, logMat);
+            log.position.set(px, y - 0.5, pz);
+            log.castShadow = true;
+            scene.add(log);
+        }
+    });
+}
+
+// First Person Hand & Sword Setup
+function createPlayerFPSArm() {
+    player.armRig = new THREE.Group();
+
+    // Player Arm Mesh
+    const armGeo = new THREE.BoxGeometry(0.25, 0.7, 0.25);
+    const shirtTex = applyPixelArtFilter(TextureGen.shirt('#00aaaa'));
+    const armMat = new THREE.MeshLambertMaterial({ map: shirtTex });
+    const arm = new THREE.Mesh(armGeo, armMat);
+    arm.position.set(0.35, -0.35, -0.5);
+    arm.rotation.set(0.3, -0.2, 0);
+
+    // Iron Sword
+    const swordTex = applyPixelArtFilter(TextureGen.sword());
+    const swordGeo = new THREE.PlaneGeometry(0.6, 0.6);
+    const swordMat = new THREE.MeshBasicMaterial({ map: swordTex, transparent: true, side: THREE.DoubleSide });
+    player.swordMesh = new THREE.Mesh(swordGeo, swordMat);
+    player.swordMesh.position.set(0.3, -0.15, -0.6);
+    player.swordMesh.rotation.set(-0.2, 0.4, -0.4);
+
+    player.armRig.add(arm);
+    player.armRig.add(player.swordMesh);
+    camera.add(player.armRig);
+    scene.add(camera);
+}
+
+// Voxel Character Creator
+function createVoxelCharacter(type = 'steve', team = 'red') {
+    const group = new THREE.Group();
+
+    const skinTex = applyPixelArtFilter(TextureGen.skin(type));
+    const shirtColor = team === 'blue' ? '#3355ff' : '#ff3333';
+    const shirtTex = applyPixelArtFilter(TextureGen.shirt(shirtColor));
+    const pantsTex = applyPixelArtFilter(TextureGen.shirt('#222266'));
+
+    const headMat = new THREE.MeshLambertMaterial({ map: skinTex });
+    const bodyMat = new THREE.MeshLambertMaterial({ map: shirtTex });
+    const pantsMat = new THREE.MeshLambertMaterial({ map: pantsTex });
+
+    // Head
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMat);
+    head.position.y = 1.4;
+    head.castShadow = true;
+    group.add(head);
+
+    // Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.25), bodyMat);
+    body.position.y = 0.8;
+    body.castShadow = true;
+    group.add(body);
+
+    // Left Arm
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.7, 0.23), bodyMat);
+    armL.position.set(-0.37, 0.8, 0);
+    armL.castShadow = true;
+    group.add(armL);
+
+    // Right Arm (Holding Sword)
+    const armR = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.7, 0.23), bodyMat);
+    armR.position.set(0.37, 0.8, 0);
+    armR.castShadow = true;
+    group.add(armR);
+
+    // Sword for Bot
+    const swordTex = applyPixelArtFilter(TextureGen.sword());
+    const swordGeo = new THREE.PlaneGeometry(0.6, 0.6);
+    const swordMat = new THREE.MeshBasicMaterial({ map: swordTex, transparent: true, side: THREE.DoubleSide });
+    const sword = new THREE.Mesh(swordGeo, swordMat);
+    sword.position.set(0.4, 0.6, -0.3);
+    sword.rotation.set(0.5, 0, 0);
+    group.add(sword);
+
+    // Left Leg
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.7, 0.23), pantsMat);
+    legL.position.set(-0.13, 0.35, 0);
+    legL.castShadow = true;
+    group.add(legL);
+
+    // Right Leg
+    const legR = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.7, 0.23), pantsMat);
+    legR.position.set(0.13, 0.35, 0);
+    legR.castShadow = true;
+    group.add(legR);
+
+    // Health Hearts Billboard Above Bot
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMat = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.position.y = 1.9;
+    sprite.scale.set(1.2, 0.3, 1);
+    group.add(sprite);
+
+    return {
+        mesh: group,
+        armR: armR,
+        legL: legL,
+        legR: legR,
+        hpSpriteCtx: ctx,
+        hpTexture: texture,
+        type: type,
+        team: team,
+        hp: 20,
+        maxHp: 20,
+        velocity: new THREE.Vector3(),
+        onGround: true,
+        attackCooldown: 0,
+        aiState: 'chase',
+        aiStateTimer: 0,
+        hurtTimer: 0
+    };
+}
+
+// Start Game Mode
+function startGame(mode) {
+    gameMode = mode;
+    document.getElementById('menu-screen').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+    document.getElementById('mode-display').innerText = `MODE: ${mode === '1v1' ? '1 vs 1' : 'Team Battle (2v2)'}`;
+
+    document.body.requestPointerLock();
+
+    // Clear Previous Bots
+    bots.forEach(b => scene.remove(b.mesh));
+    bots = [];
+
+    // Reset Player
+    player.hp = 20;
+    player.kills = 0;
+    player.position.set(0, 1.55, 10);
+    player.velocity.set(0, 0, 0);
+    player.rotation.yaw = 0;
+    player.rotation.pitch = 0;
+    updateHeartsUI();
+    updateKillsUI();
+
+    // Spawn Bots
+    if (mode === '1v1') {
+        const bot = createVoxelCharacter('zombie', 'red');
+        bot.mesh.position.set(0, 0, -10);
+        scene.add(bot.mesh);
+        bots.push(bot);
+    } else {
+        // Ally Bot
+        const ally = createVoxelCharacter('alex', 'blue');
+        ally.mesh.position.set(-3, 0, 8);
+        scene.add(ally.mesh);
+        bots.push(ally);
+
+        // Enemy 1
+        const enemy1 = createVoxelCharacter('zombie', 'red');
+        enemy1.mesh.position.set(-4, 0, -10);
+        scene.add(enemy1.mesh);
+        bots.push(enemy1);
+
+        // Enemy 2
+        const enemy2 = createVoxelCharacter('steve', 'red');
+        enemy2.mesh.position.set(4, 0, -10);
+        scene.add(enemy2.mesh);
+        bots.push(enemy2);
+    }
+
+    logMessage(`ゲーム開始: ${mode === '1v1' ? '1v1 対戦' : 'チーム戦'}!`);
+    isGameRunning = true;
+}
+
+// Mouse Aim Controls
+function onMouseMove(e) {
+    if (document.pointerLockElement !== document.body || !isGameRunning) return;
+
+    const sensitivity = 0.0022;
+    player.rotation.yaw -= e.movementX * sensitivity;
+    player.rotation.pitch -= e.movementY * sensitivity;
+
+    // Limit Vertical Pitch
+    player.rotation.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, player.rotation.pitch));
+}
+
+// Player Attack Action
+function playerAttack() {
+    if (player.attackCooldown > 0) return;
+
+    player.attackCooldown = 0.35; // Cooldown seconds
+    player.isSwinging = true;
+    player.swingProgress = 0;
+
+    // Check hit target
+    const raycaster = new THREE.Raycaster();
+    const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.rotation.pitch, player.rotation.yaw, 0, 'YXZ'));
+    raycaster.set(camera.position, dir);
+
+    let hitTarget = null;
+    let minDist = 3.2; // Attack Range
+
+    bots.forEach(bot => {
+        if (bot.team === player.team || bot.hp <= 0) return;
+        const intersects = raycaster.intersectObject(bot.mesh, true);
+        if (intersects.length > 0 && intersects[0].distance < minDist) {
+            minDist = intersects[0].distance;
+            hitTarget = bot;
+        }
+    });
+
+    if (hitTarget) {
+        // Critical Hit logic (Falling down)
+        const isCritical = player.velocity.y < -0.05 && !player.onGround;
+        const damage = isCritical ? 3 : 2; // Critical: 1.5 Hearts, Normal: 1 Heart
+
+        damageBot(hitTarget, damage, player.position, isCritical);
+    }
+}
+
+// Damage Bot & Apply Knockback
+function damageBot(bot, damage, attackerPos, isCritical = false) {
+    bot.hp -= damage;
+    bot.hurtTimer = 0.2; // Hurt Flash effect
+
+    // Knockback Vector
+    const kbDir = new THREE.Vector3().subVectors(bot.mesh.position, attackerPos).normalize();
+    kbDir.y = 0;
+    const kbForce = isCritical ? 8.5 : 6.0;
+    bot.velocity.x += kbDir.x * kbForce;
+    bot.velocity.z += kbDir.z * kbForce;
+    bot.velocity.y += 3.5; // Vertical pop
+
+    logMessage(`${bot.team === 'blue' ? '味方' : '敵'} に ${damage / 2} ❤️ ダメージ ${isCritical ? '💥 クリティカル!' : ''}`);
+
+    if (bot.hp <= 0) {
+        bot.hp = 0;
+        scene.remove(bot.mesh);
+        logMessage(`☠️ ${bot.team === 'blue' ? '味方' : '敵BOT'} を撃破!`);
+        if (bot.team === 'red') {
+            player.kills++;
+            updateKillsUI();
+        }
+        checkWinCondition();
+    }
+}
+
+// Damage Player
+function damagePlayer(damage, attackerPos) {
+    player.hp -= damage;
+    updateHeartsUI();
+
+    // Damage Vignette Flash
+    const flash = document.getElementById('damage-flash');
+    flash.style.opacity = '1';
+    setTimeout(() => flash.style.opacity = '0', 150);
+
+    // Player Knockback
+    const kbDir = new THREE.Vector3().subVectors(player.position, attackerPos).normalize();
+    player.velocity.x += kbDir.x * 5.0;
+    player.velocity.z += kbDir.z * 5.0;
+    player.velocity.y += 2.5;
+
+    logMessage(`⚠️ プレイヤーが被弾! (${damage / 2} ❤️)`);
+
+    if (player.hp <= 0) {
+        player.hp = 0;
+        updateHeartsUI();
+        endGame(false);
+    }
+}
+
+// UI Update Helpers
+function updateHeartsUI() {
+    const container = document.getElementById('hearts-bar');
+    container.innerHTML = '';
+    
+    // 20 HP = 10 Hearts
+    for (let i = 0; i < 10; i++) {
+        const heartHp = player.hp - (i * 2);
+        const span = document.createElement('span');
+        span.className = 'heart';
+        if (heartHp >= 2) {
+            span.innerText = '❤️'; // Full Heart
+        } else if (heartHp === 1) {
+            span.innerText = '💔'; // Half Heart
+        } else {
+            span.innerText = '🖤'; // Empty Heart
+        }
+        container.appendChild(span);
+    }
+}
+
+function updateKillsUI() {
+    document.getElementById('kill-count').innerText = player.kills;
+    const aliveEnemies = bots.filter(b => b.team === 'red' && b.hp > 0).length;
+    document.getElementById('alive-count').innerText = aliveEnemies;
+}
+
+function updateBotHealthSprite(bot) {
+    const ctx = bot.hpSpriteCtx;
+    ctx.clearRect(0, 0, 128, 32);
+    ctx.font = '20px sans-serif';
+    
+    const heartsCount = Math.max(0, Math.ceil(bot.hp / 2));
+    let heartsStr = '';
+    for(let i=0; i<heartsCount; i++) heartsStr += '❤️';
+
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(heartsStr, 64 - (heartsCount * 8), 22);
+    bot.hpTexture.needsUpdate = true;
+}
+
+function logMessage(msg) {
+    const log = document.getElementById('combat-log');
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerText = msg;
+    log.appendChild(entry);
+    if (log.children.length > 6) log.removeChild(log.children[0]);
+}
+
+// Win/Loss Condition Check
+function checkWinCondition() {
+    updateKillsUI();
+    const remainingEnemies = bots.filter(b => b.team === 'red' && b.hp > 0).length;
+    if (remainingEnemies === 0) {
+        endGame(true);
+    }
+}
+
+function endGame(isVictory) {
+    isGameRunning = false;
+    document.exitPointerLock();
+    setTimeout(() => {
+        alert(isVictory ? '🎉 Victory! 勝利しました！' : '☠️ Game Over... 敗北しました。');
+        document.getElementById('menu-screen').style.display = 'flex';
+        document.getElementById('hud').style.display = 'none';
+    }, 200);
+}
+
+// Tactical AI Update Loop
+function updateAI(delta) {
+    bots.forEach(bot => {
+        if (bot.hp <= 0) return;
+
+        updateBotHealthSprite(bot);
+
+        // Hurt Flash & Color Effect
+        if (bot.hurtTimer > 0) {
+            bot.hurtTimer -= delta;
+            bot.mesh.traverse(child => {
+                if (child.isMesh && child.material) {
+                    if (!child.userData.origColor) child.userData.origColor = child.material.color.getHex();
+                    child.material.color.setHex(0xff3333);
+                }
+            });
+        } else {
+            bot.mesh.traverse(child => {
+                if (child.isMesh && child.material && child.userData.origColor) {
+                    child.material.color.setHex(child.userData.origColor);
+                }
+            });
+        }
+
+        // Target Acquisition (Find closest opposing enemy)
+        let targetPos = null;
+        let targetDist = Infinity;
+        let targetEntity = null;
+
+        if (bot.team === 'red') {
+            // Target Player
+            const distToPlayer = bot.mesh.position.distanceTo(player.position);
+            targetPos = player.position.clone();
+            targetDist = distToPlayer;
+
+            // Or target ally bot if closer
+            bots.forEach(other => {
+                if (other.team === 'blue' && other.hp > 0) {
+                    const d = bot.mesh.position.distanceTo(other.mesh.position);
+                    if (d < targetDist) {
+                        targetDist = d;
+                        targetPos = other.mesh.position.clone();
+                        targetEntity = other;
                     }
-                    ctx.fillRect(x, y, 1, 1);
                 }
-            }
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.magFilter = THREE.NearestFilter;
-            return texture;
-        }
-
-        const grassTopTex = createCraftTexture('grass');
-        const dirtTex = createCraftTexture('dirt');
-        const blockMaterials = [
-            new THREE.MeshLambertMaterial({ map: dirtTex }), // 右
-            new THREE.MeshLambertMaterial({ map: dirtTex }), // 左
-            new THREE.MeshLambertMaterial({ map: grassTopTex }), // 上
-            new THREE.MeshLambertMaterial({ map: dirtTex }), // 下
-            new THREE.MeshLambertMaterial({ map: dirtTex }), // 前
-            new THREE.MeshLambertMaterial({ map: dirtTex })  // 後
-        ];
-
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
-
-        // --- 無限ワールドデータ ---
-        const worldBlocks = {};
-        const chunksLoaded = {};
-        const chunkSize = 16;
-        
-        const maxBlocks = 100000;
-        const instancedMesh = new THREE.InstancedMesh(geometry, blockMaterials, maxBlocks);
-        instancedMesh.count = 0;
-        scene.add(instancedMesh);
-
-        const instanceIdToKey = [];
-        const keyToInstanceId = {};
-
-        function createBlock(x, y, z) {
-            const key = `${x}_${y}_${z}`;
-            if (worldBlocks[key]) return;
-
-            worldBlocks[key] = true;
-            const dummy = new THREE.Object3D();
-            dummy.position.set(x, y, z);
-            dummy.updateMatrix();
-
-            const id = instancedMesh.count;
-            instancedMesh.setMatrixAt(id, dummy.matrix);
-            instanceIdToKey[id] = key;
-            keyToInstanceId[key] = id;
-
-            instancedMesh.count++;
-            instancedMesh.instanceMatrix.needsUpdate = true;
-        }
-
-        function removeBlock(key) {
-            if (!worldBlocks[key]) return;
-
-            const id = keyToInstanceId[key];
-            const lastId = instancedMesh.count - 1;
-
-            if (id !== lastId) {
-                const lastMatrix = new THREE.Matrix4();
-                instancedMesh.getMatrixAt(lastId, lastMatrix);
-                instancedMesh.setMatrixAt(id, lastMatrix);
-
-                const lastKey = instanceIdToKey[lastId];
-                keyToInstanceId[lastKey] = id;
-                instanceIdToKey[id] = lastKey;
-            }
-
-            delete worldBlocks[key];
-            delete keyToInstanceId[key];
-            instancedMesh.count--;
-            instancedMesh.instanceMatrix.needsUpdate = true;
-        }
-
-        function loadChunk(chunkX, chunkZ) {
-            const chunkKey = `${chunkX}_${chunkZ}`;
-            if (chunksLoaded[chunkKey]) return;
-            chunksLoaded[chunkKey] = true;
-
-            const startX = chunkX * chunkSize;
-            const startZ = chunkZ * chunkSize;
-
-            for (let x = startX; x < startX + chunkSize; x++) {
-                for (let z = startZ; z < startZ + chunkSize; z++) {
-                    const height = Math.floor(Math.sin(x * 0.1) * 3 + Math.cos(z * 0.1) * 3);
-                    createBlock(x, height, z);
-                    createBlock(x, height - 1, z);
-                    createBlock(x, height - 2, z);
+            });
+        } else {
+            // Ally AI targets red bots
+            bots.forEach(other => {
+                if (other.team === 'red' && other.hp > 0) {
+                    const d = bot.mesh.position.distanceTo(other.mesh.position);
+                    if (d < targetDist) {
+                        targetDist = d;
+                        targetPos = other.mesh.position.clone();
+                        targetEntity = other;
+                    }
                 }
+            });
+        }
+
+        if (!targetPos) return;
+
+        // AI Decision State Machine
+        bot.aiStateTimer -= delta;
+        if (bot.aiStateTimer <= 0) {
+            bot.aiStateTimer = 1.0 + Math.random() * 1.5;
+            if (targetDist < 2.5 && Math.random() < 0.4) {
+                bot.aiState = 'strafe'; // Step side to side
+            } else if (bot.hp < 6 && Math.random() < 0.5) {
+                bot.aiState = 'retreat'; // Back away
+            } else {
+                bot.aiState = 'chase';
             }
         }
 
-        function updateChunks() {
-            const pChunkX = Math.floor(camera.position.x / chunkSize);
-            const pChunkZ = Math.floor(camera.position.z / chunkSize);
-            const r = 1;
-            for (let x = -r; x <= r; x++) {
-                for (let z = -r; z <= r; z++) {
-                    loadChunk(pChunkX + x, pChunkZ + z);
+        // Movement Vector Logic
+        const moveDir = new THREE.Vector3();
+        if (bot.aiState === 'chase') {
+            moveDir.subVectors(targetPos, bot.mesh.position).normalize();
+        } else if (bot.aiState === 'retreat') {
+            moveDir.subVectors(bot.mesh.position, targetPos).normalize();
+        } else if (bot.aiState === 'strafe') {
+            const forward = new THREE.Vector3().subVectors(targetPos, bot.mesh.position).normalize();
+            moveDir.set(-forward.z, 0, forward.x);
+        }
+
+        // Apply Speed
+        const speed = 4.2;
+        bot.velocity.x = moveDir.x * speed;
+        bot.velocity.z = moveDir.z * speed;
+
+        // Apply Gravity
+        bot.velocity.y -= 18.0 * delta;
+        bot.mesh.position.addScaledVector(bot.velocity, delta);
+
+        // Ground Collision
+        if (bot.mesh.position.y <= 0) {
+            bot.mesh.position.y = 0;
+            bot.velocity.y = 0;
+            bot.onGround = true;
+        }
+
+        // Look at Target
+        bot.mesh.lookAt(targetPos.x, bot.mesh.position.y, targetPos.z);
+
+        // Limb Animation (Walking)
+        const walkCycle = Math.sin(Date.now() * 0.01) * 0.5;
+        bot.legL.rotation.x = walkCycle;
+        bot.legR.rotation.x = -walkCycle;
+        bot.armR.rotation.x = -walkCycle;
+
+        // Cooldown & Attack Logic
+        bot.attackCooldown -= delta;
+        if (targetDist < 2.2 && bot.attackCooldown <= 0) {
+            bot.attackCooldown = 0.8 + Math.random() * 0.4;
+            // Swing Arm
+            bot.armR.rotation.x = -1.2;
+
+            if (targetPos.equals(player.position)) {
+                damagePlayer(2, bot.mesh.position); // 1 Heart Damage
+            } else if (targetEntity) {
+                damageBot(targetEntity, 2, bot.mesh.position);
+            }
+        }
+    });
+}
+
+// Main Physics & Render Game Loop
+function gameLoop() {
+    requestAnimationFrame(gameLoop);
+
+    try {
+        const delta = Math.min(clock.getDelta(), 0.1);
+
+        if (isGameRunning) {
+            // --- Player Physics & Control Update ---
+            const moveVector = new THREE.Vector3();
+            if (keys['KeyW']) moveVector.z -= 1;
+            if (keys['KeyS']) moveVector.z += 1;
+            if (keys['KeyA']) moveVector.x -= 1;
+            if (keys['KeyD']) moveVector.x += 1;
+
+            moveVector.normalize();
+            moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.yaw);
+
+            const speed = 7.0;
+            player.velocity.x = moveVector.x * speed;
+            player.velocity.z = moveVector.z * speed;
+
+            // Space Jump Logic
+            if (keys['Space'] && player.onGround) {
+                player.velocity.y = 6.8;
+                player.onGround = false;
+            }
+
+            // Gravity
+            player.velocity.y -= 18.0 * delta;
+
+            // Update Position
+            player.position.x += player.velocity.x * delta;
+            player.position.y += player.velocity.y * delta;
+            player.position.z += player.velocity.z * delta;
+
+            // Arena Bounds Collision
+            const limit = (arenaSize / 2) - 1;
+            player.position.x = Math.max(-limit, Math.min(limit, player.position.x));
+            player.position.z = Math.max(-limit, Math.min(limit, player.position.z));
+
+            // Floor Collision
+            if (player.position.y <= 1.55) {
+                player.position.y = 1.55;
+                player.velocity.y = 0;
+                player.onGround = true;
+            }
+
+            // Camera View Placement
+            camera.position.copy(player.position);
+            camera.rotation.set(0, 0, 0);
+            camera.rotation.y = player.rotation.yaw;
+            camera.rotation.x = player.rotation.pitch;
+
+            // --- First-Person Sword Swing Animation ---
+            if (player.attackCooldown > 0) {
+                player.attackCooldown -= delta;
+            }
+
+            if (player.isSwinging) {
+                player.swingProgress += delta * 7.5;
+                if (player.swingProgress >= 1) {
+                    player.isSwinging = false;
+                    player.swingProgress = 0;
                 }
+                const swingPhase = Math.sin(player.swingProgress * Math.PI);
+                player.armRig.rotation.x = -swingPhase * 0.7;
+                player.armRig.rotation.y = -swingPhase * 0.5;
+                player.armRig.position.z = -swingPhase * 0.2;
+            } else {
+                // Bobbing while walking
+                const isMoving = keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD'];
+                const bob = isMoving ? Math.sin(Date.now() * 0.01) * 0.02 : 0;
+                player.armRig.position.y = bob;
+                player.armRig.rotation.set(0, 0, 0);
             }
+
+            // Update AI Bots
+            updateAI(delta);
         }
 
-        // --- 破壊と設置（画面上のマウス座標から光線を飛ばすように変更） ---
-        const raycaster = new THREE.Raycaster();
-        const mouseVec = new THREE.Vector2();
+        renderer.render(scene, camera);
 
-        function handleInteraction(e, isRightClick) {
-            // クリックした瞬間の画面上のマウス位置を取得
-            mouseVec.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouseVec.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    } catch (err) {
+        console.error("Game Loop Protection caught error:", err);
+    }
+}
 
-            raycaster.setFromCamera(mouseVec, camera);
-            raycaster.far = 7;
-            
-            const intersects = raycaster.intersectObject(instancedMesh);
+// Handle Window Resizing
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
 
-            if (intersects.length > 0) {
-                const hit = intersects[0];
-                const instanceId = hit.instanceId;
-                const key = instanceIdToKey[instanceId];
+// Start Engine
+initEngine();
+gameLoop();
 
-                if (!key) return;
-                const coords = key.split('_').map(Number);
-
-                if (!isRightClick) {
-                    removeBlock(key);
-                } else {
-                    const normal = hit.face.normal;
-                    const newX = Math.round(coords[0] + normal.x);
-                    const newY = Math.round(coords[1] + normal.y);
-                    const newZ = Math.round(coords[2] + normal.z);
-                    createBlock(newX, newY, newZ);
-                }
-            }
-        }
-
-        window.addEventListener('pointerdown', (e) => {
-            if (e.button === 0) handleInteraction(e, false); // 左クリック破壊
-            if (e.button === 2) handleInteraction(e, true);  // 右クリック設置
-        });
-        window.addEventListener('contextmenu', e => e.preventDefault());
-
-        // --- キー移動 ---
-        const keys = { w: false, a: false, s: false, d: false };
-        window.addEventListener('keydown', (e) => { const k = e.key.toLowerCase(); if (k in keys) keys[k] = true; });
-        window.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (k in keys) keys[k] = false; });
-
-        // --- アニメーションループ ---
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // 視線を目標値に向けてスムーズに近づける（ぬるぬるカメラ）
-            camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.1;
-            camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.1;
-
-            updateChunks();
-
-            // 移動スピード
-            const speed = 0.15;
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-            forward.y = 0; forward.normalize();
-            right.y = 0; right.normalize();
-
-            if (keys.w) camera.position.addScaledVector(forward, speed);
-            if (keys.s) camera.position.addScaledVector(forward, -speed);
-            if (keys.a) camera.position.addScaledVector(right, -speed);
-            if (keys.d) camera.position.addScaledVector(right, speed);
-
-            // 地面衝突判定
-            const currentX = Math.round(camera.position.x);
-            const currentZ = Math.round(camera.position.z);
-            
-            let highestY = -999;
-            for (let y = 12; y > -10; y--) {
-                if (worldBlocks[`${currentX}_${y}_${currentZ}`]) {
-                    highestY = y + 0.5;
-                    break;
-                }
-            }
-
-            if (highestY !== -999) {
-                const targetY = highestY + 1.6;
-                camera.position.y += (targetY - camera.position.y) * 0.2; // 自然に着地
-            }
-
-            renderer.render(scene, camera);
-        }
-        animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
+</script>
 </body>
 </html>
