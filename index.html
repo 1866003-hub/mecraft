@@ -62,7 +62,7 @@
         }
 
         /* Overlay screens */
-        #menu-screen {
+        #menu-screen, #inventory-screen {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.75);
@@ -72,13 +72,9 @@
             align-items: center;
             z-index: 100;
         }
-        
-        #menu-screen h1 {
-            font-size: 38px;
-            color: #ffff55;
-            text-shadow: 3px 3px #3f3f00;
-            margin-bottom: 20px;
-            text-align: center;
+        #inventory-screen {
+            display: none;
+            z-index: 90;
         }
 
         #hud {
@@ -105,10 +101,10 @@
         #crosshair::before { top: 7px; left: 0; width: 16px; height: 2px; }
         #crosshair::after { top: 0; left: 7px; width: 2px; height: 16px; }
 
-        /* Hearts Health Display */
+        /* Bottom HUD & Hotbar */
         .hud-bottom {
             position: absolute;
-            bottom: 20px;
+            bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
@@ -116,17 +112,56 @@
             align-items: center;
             gap: 6px;
         }
+
         .hearts-container {
             display: flex;
             gap: 4px;
             background: rgba(0,0,0,0.4);
-            padding: 6px 12px;
+            padding: 4px 10px;
             border-radius: 4px;
         }
         .heart {
-            font-size: 24px;
+            font-size: 22px;
             line-height: 1;
             filter: drop-shadow(2px 2px 0px #000);
+        }
+
+        /* Hotbar UI */
+        .hotbar-container {
+            display: flex;
+            background: #8b8b8b;
+            border: 4px solid #3c3c3c;
+            box-shadow: inset -4px -4px 0px 0px #1e1e1e, inset 4px 4px 0px 0px #5a5a5a;
+            padding: 2px;
+        }
+        .slot {
+            width: 44px;
+            height: 44px;
+            background: #8b8b8b;
+            border: 2px solid #373737;
+            box-shadow: inset 2px 2px 0px 0px #373737, inset -2px -2px 0px 0px #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        .slot.selected {
+            border: 3px solid #ffffff;
+            box-shadow: inset 0 0 4px #000;
+        }
+        .slot img, .slot canvas {
+            width: 32px;
+            height: 32px;
+            image-rendering: pixelated;
+        }
+        .slot-count {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px #000;
         }
 
         /* Stats Overlay */
@@ -150,7 +185,7 @@
 
         #combat-log {
             position: absolute;
-            bottom: 70px;
+            bottom: 110px;
             left: 20px;
             font-size: 14px;
             text-shadow: 2px 2px #000;
@@ -171,7 +206,7 @@
             pointer-events: none;
         }
     </style>
-    <!-- Three.js (軽量3Dグラフィックライブラリ) -->
+    <!-- Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -183,7 +218,7 @@
     <div id="menu-screen">
         <div class="mc-panel" style="text-align: center; max-width: 500px;">
             <h1>MINECRAFT AI PvP</h1>
-            <p style="color: #aaa; margin-bottom: 20px;">Prototype 0.1 (Fixed FPS Camera)</p>
+            <p style="color: #aaa; margin-bottom: 20px;">Prototype 0.1 (Inventory & Steak Food)</p>
 
             <div style="margin-bottom: 20px;">
                 <button class="mc-button" onclick="startGame('1v1')">1対1 対戦 (1v1)</button><br>
@@ -192,12 +227,30 @@
 
             <div style="font-size: 13px; color: #ddd; text-align: left; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 4px;">
                 <b>操作方法:</b><br>
-                ・WASD : 移動<br>
-                ・Space : ジャンプ（落下中攻撃で💥クリティカル!）<br>
-                ・マウス : 視点移動 (画面クリックでロック)<br>
-                ・左クリック : 剣攻撃 (ハート1個ダメージ)<br>
-                ・Esc : 視点解除
+                ・WASD : 移動 | Space : ジャンプ<br>
+                ・E : インベントリ開閉<br>
+                ・ホイール / 1〜3キー : スロット切り替え<br>
+                ・左クリック : 攻撃 (剣)<br>
+                ・右クリック長押し : 食料を食べて体力回復 (ステーキ 🥩)<br>
+                ・Esc : マウス視点解除
             </div>
+        </div>
+    </div>
+
+    <!-- インベントリ画面 (Eキー) -->
+    <div id="inventory-screen">
+        <div class="mc-panel" style="width: 360px; text-align: center;">
+            <h2 style="color: #ffff55; margin-bottom: 15px; text-shadow: 2px 2px #000;">Crafting & Inventory</h2>
+            <div style="display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; margin-bottom: 20px;">
+                <!-- 27 Main Storage Slots -->
+                <script>
+                    for(let i=0; i<27; i++) {
+                        document.write('<div class="slot"></div>');
+                    }
+                </script>
+            </div>
+            <p style="color: #ccc; font-size: 12px; margin-bottom: 15px;">[E]キー または [ESC] でインベントリを閉じる</p>
+            <button class="mc-button" onclick="toggleInventory(false)">閉じる (Close)</button>
         </div>
     </div>
 
@@ -212,15 +265,27 @@
         </div>
 
         <div class="controls-info mc-panel">
-            WASD: 移動 | Space: ジャンプ<br>
-            左クリック: 攻撃 | ESC: マウス解除
+            E: インベントリ | ホイール: 武器切替<br>
+            左クリック: 攻撃 | 右クリック: 食事
         </div>
 
         <div id="combat-log"></div>
 
         <div class="hud-bottom">
             <div id="hearts-bar" class="hearts-container"></div>
-            <div style="font-size: 12px; text-shadow: 1px 1px #000; color: #ccc;">PLAYER HEALTH</div>
+            
+            <!-- Minecraft Hotbar UI -->
+            <div class="hotbar-container" id="hotbar">
+                <div class="slot selected" id="slot-0"></div>
+                <div class="slot" id="slot-1"></div>
+                <div class="slot" id="slot-2"></div>
+                <div class="slot" id="slot-3"></div>
+                <div class="slot" id="slot-4"></div>
+                <div class="slot" id="slot-5"></div>
+                <div class="slot" id="slot-6"></div>
+                <div class="slot" id="slot-7"></div>
+                <div class="slot" id="slot-8"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -339,7 +404,17 @@ const TextureGen = {
         for(let i=0; i<9; i++) ctx.fillRect(14-i, i, 1, 1);
         ctx.fillStyle = '#5c4033'; ctx.fillRect(4, 10, 3, 3);
         ctx.fillStyle = '#3d281e'; ctx.fillRect(2, 12, 3, 3);
-        return new THREE.CanvasTexture(cvs);
+        return { cvs, texture: new THREE.CanvasTexture(cvs) };
+    },
+
+    steak() {
+        const { cvs, ctx } = this.createCanvas();
+        ctx.clearRect(0,0,16,16);
+        // Cooked Steak Meat Texture
+        ctx.fillStyle = '#8b2600'; ctx.fillRect(3, 4, 10, 8);
+        ctx.fillStyle = '#a52a2a'; ctx.fillRect(4, 3, 8, 10);
+        ctx.fillStyle = '#d2b48c'; ctx.fillRect(5, 5, 2, 2); ctx.fillRect(9, 8, 2, 2);
+        return { cvs, texture: new THREE.CanvasTexture(cvs) };
     }
 };
 
@@ -353,7 +428,16 @@ function applyPixelArtFilter(texture) {
 let scene, camera, renderer;
 let gameMode = '1v1';
 let isGameRunning = false;
+let isInventoryOpen = false;
 let clock = new THREE.Clock();
+
+// Hotbar Inventory State
+const inventory = [
+    { id: 'sword', name: 'Iron Sword', count: 1 },
+    { id: 'steak', name: 'Steak', count: 5 },
+    null, null, null, null, null, null, null
+];
+let selectedSlot = 0;
 
 // Player State
 const player = {
@@ -365,9 +449,12 @@ const player = {
     rotation: { yaw: 0, pitch: 0 },
     onGround: true,
     attackCooldown: 0,
+    eatTimer: 0,
+    isEating: false,
     team: 'blue',
     armRig: null,
     swordMesh: null,
+    steakMesh: null,
     isSwinging: false,
     swingProgress: 0
 };
@@ -384,7 +471,6 @@ function initEngine() {
     scene.fog = new THREE.FogExp2(0x87ceeb, 0.025);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    // 視点回転順序を YXZ に指定（FPSカメラバグの根本防止）
     camera.rotation.order = 'YXZ';
 
     renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -405,21 +491,54 @@ function initEngine() {
 
     createArena();
     createPlayerFPSArm();
+    renderHotbarUI();
 
+    // Event Listeners
     window.addEventListener('resize', onWindowResize);
-    document.addEventListener('keydown', (e) => { keys[e.code] = true; });
-    document.addEventListener('keyup', (e) => { keys[e.code] = false; });
-    
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mousedown', (e) => {
-        if (e.button === 0 && isGameRunning) {
-            if (document.pointerLockElement !== document.body) {
-                document.body.requestPointerLock();
-            } else {
-                playerAttack();
+    window.addEventListener('wheel', onMouseWheel);
+
+    document.addEventListener('keydown', (e) => {
+        keys[e.code] = true;
+
+        if (e.code === 'KeyE') {
+            toggleInventory();
+        }
+
+        // Slot keys 1-9
+        if (e.code.startsWith('Digit')) {
+            const num = parseInt(e.code.replace('Digit', '')) - 1;
+            if (num >= 0 && num <= 8) {
+                selectSlot(num);
             }
         }
     });
+
+    document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+    document.addEventListener('mousemove', onMouseMove);
+
+    document.addEventListener('mousedown', (e) => {
+        if (!isGameRunning || isInventoryOpen) return;
+
+        if (document.pointerLockElement !== document.body) {
+            document.body.requestPointerLock();
+            return;
+        }
+
+        if (e.button === 0) { // Left Click
+            playerAttack();
+        } else if (e.button === 2) { // Right Click
+            playerStartEat();
+        }
+    });
+
+    document.addEventListener('mouseup', (e) => {
+        if (e.button === 2) {
+            player.isEating = false;
+        }
+    });
+
+    // Disable default right click context menu
+    document.addEventListener('contextmenu', e => e.preventDefault());
 }
 
 function createArena() {
@@ -462,9 +581,7 @@ function createArena() {
         }
     }
 
-    const pillarPositions = [
-        [-5, -5], [5, -5], [-5, 5], [5, 5], [0, 0]
-    ];
+    const pillarPositions = [[-5, -5], [5, -5], [-5, 5], [5, 5], [0, 0]];
     pillarPositions.forEach(([px, pz]) => {
         for (let y = 1; y <= 3; y++) {
             const log = new THREE.Mesh(blockGeo, logMat);
@@ -485,17 +602,90 @@ function createPlayerFPSArm() {
     arm.position.set(0.35, -0.35, -0.5);
     arm.rotation.set(0.3, -0.2, 0);
 
-    const swordTex = applyPixelArtFilter(TextureGen.sword());
+    // Sword
+    const swordRes = TextureGen.sword();
+    const swordTex = applyPixelArtFilter(swordRes.texture);
     const swordGeo = new THREE.PlaneGeometry(0.6, 0.6);
     const swordMat = new THREE.MeshBasicMaterial({ map: swordTex, transparent: true, side: THREE.DoubleSide });
     player.swordMesh = new THREE.Mesh(swordGeo, swordMat);
     player.swordMesh.position.set(0.3, -0.15, -0.6);
     player.swordMesh.rotation.set(-0.2, 0.4, -0.4);
 
+    // Steak Food
+    const steakRes = TextureGen.steak();
+    const steakTex = applyPixelArtFilter(steakRes.texture);
+    const steakGeo = new THREE.PlaneGeometry(0.4, 0.4);
+    const steakMat = new THREE.MeshBasicMaterial({ map: steakTex, transparent: true, side: THREE.DoubleSide });
+    player.steakMesh = new THREE.Mesh(steakGeo, steakMat);
+    player.steakMesh.position.set(0.3, -0.2, -0.5);
+    player.steakMesh.visible = false;
+
     player.armRig.add(arm);
     player.armRig.add(player.swordMesh);
+    player.armRig.add(player.steakMesh);
     camera.add(player.armRig);
     scene.add(camera);
+}
+
+function renderHotbarUI() {
+    for(let i=0; i<9; i++) {
+        const slotEl = document.getElementById(`slot-${i}`);
+        slotEl.innerHTML = '';
+        const item = inventory[i];
+
+        if (item) {
+            let res = item.id === 'sword' ? TextureGen.sword() : TextureGen.steak();
+            const img = document.createElement('img');
+            img.src = res.cvs.toDataURL();
+            slotEl.appendChild(img);
+
+            if (item.count > 1) {
+                const countEl = document.createElement('div');
+                countEl.className = 'slot-count';
+                countEl.innerText = item.count;
+                slotEl.appendChild(countEl);
+            }
+        }
+    }
+}
+
+function selectSlot(index) {
+    document.getElementById(`slot-${selectedSlot}`).classList.remove('selected');
+    selectedSlot = index;
+    document.getElementById(`slot-${selectedSlot}`).classList.add('selected');
+
+    // Update Held Item View Model
+    const item = inventory[selectedSlot];
+    if (item && item.id === 'steak') {
+        player.swordMesh.visible = false;
+        player.steakMesh.visible = true;
+    } else {
+        player.swordMesh.visible = true;
+        player.steakMesh.visible = false;
+    }
+}
+
+function onMouseWheel(e) {
+    if (!isGameRunning || isInventoryOpen) return;
+    if (e.deltaY > 0) {
+        selectSlot((selectedSlot + 1) % 9);
+    } else if (e.deltaY < 0) {
+        selectSlot((selectedSlot + 8) % 9);
+    }
+}
+
+function toggleInventory(forceState) {
+    if (!isGameRunning) return;
+    isInventoryOpen = forceState !== undefined ? forceState : !isInventoryOpen;
+
+    const invScreen = document.getElementById('inventory-screen');
+    if (isInventoryOpen) {
+        invScreen.style.display = 'flex';
+        document.exitPointerLock();
+    } else {
+        invScreen.style.display = 'none';
+        document.body.requestPointerLock();
+    }
 }
 
 function createVoxelCharacter(type = 'steve', team = 'red') {
@@ -530,7 +720,8 @@ function createVoxelCharacter(type = 'steve', team = 'red') {
     armR.castShadow = true;
     group.add(armR);
 
-    const swordTex = applyPixelArtFilter(TextureGen.sword());
+    const swordRes = TextureGen.sword();
+    const swordTex = applyPixelArtFilter(swordRes.texture);
     const swordGeo = new THREE.PlaneGeometry(0.6, 0.6);
     const swordMat = new THREE.MeshBasicMaterial({ map: swordTex, transparent: true, side: THREE.DoubleSide });
     const sword = new THREE.Mesh(swordGeo, swordMat);
@@ -595,6 +786,10 @@ function startGame(mode) {
     player.velocity.set(0, 0, 0);
     player.rotation.yaw = 0;
     player.rotation.pitch = 0;
+    
+    inventory[1] = { id: 'steak', name: 'Steak', count: 5 };
+    selectSlot(0);
+    renderHotbarUI();
     updateHeartsUI();
     updateKillsUI();
 
@@ -624,20 +819,20 @@ function startGame(mode) {
     isGameRunning = true;
 }
 
-// 修正されたマウス視点移動
 function onMouseMove(e) {
-    if (document.pointerLockElement !== document.body || !isGameRunning) return;
+    if (document.pointerLockElement !== document.body || !isGameRunning || isInventoryOpen) return;
 
     const sensitivity = 0.0022;
     player.rotation.yaw -= e.movementX * sensitivity;
     player.rotation.pitch -= e.movementY * sensitivity;
 
-    // 上下角度の制限（約85度）
     const maxPitch = Math.PI / 2.1;
     player.rotation.pitch = Math.max(-maxPitch, Math.min(maxPitch, player.rotation.pitch));
 }
 
 function playerAttack() {
+    const item = inventory[selectedSlot];
+    if (!item || item.id !== 'sword') return; // Sword required to attack
     if (player.attackCooldown > 0) return;
 
     player.attackCooldown = 0.35;
@@ -665,6 +860,13 @@ function playerAttack() {
         const damage = isCritical ? 3 : 2;
         damageBot(hitTarget, damage, player.position, isCritical);
     }
+}
+
+function playerStartEat() {
+    const item = inventory[selectedSlot];
+    if (!item || item.id !== 'steak' || player.hp >= player.maxHp) return;
+    player.isEating = true;
+    player.eatTimer = 1.2; // Eat duration seconds
 }
 
 function damageBot(bot, damage, attackerPos, isCritical = false) {
@@ -900,7 +1102,7 @@ function gameLoop() {
     try {
         const delta = Math.min(clock.getDelta(), 0.1);
 
-        if (isGameRunning) {
+        if (isGameRunning && !isInventoryOpen) {
             const moveVector = new THREE.Vector3();
             if (keys['KeyW']) moveVector.z -= 1;
             if (keys['KeyS']) moveVector.z += 1;
@@ -935,29 +1137,52 @@ function gameLoop() {
                 player.onGround = true;
             }
 
-            // 修正されたカメラ位置と回転適用
             camera.position.copy(player.position);
             camera.rotation.set(player.rotation.pitch, player.rotation.yaw, 0, 'YXZ');
 
-            if (player.attackCooldown > 0) {
-                player.attackCooldown -= delta;
-            }
+            // --- Eating Steak Logic ---
+            if (player.isEating) {
+                player.eatTimer -= delta;
+                const chew = Math.sin(Date.now() * 0.03) * 0.05;
+                player.armRig.position.y = chew;
+                player.armRig.position.z = -0.1;
 
-            if (player.isSwinging) {
-                player.swingProgress += delta * 7.5;
-                if (player.swingProgress >= 1) {
-                    player.isSwinging = false;
-                    player.swingProgress = 0;
+                if (player.eatTimer <= 0) {
+                    player.isEating = false;
+                    player.hp = Math.min(player.maxHp, player.hp + 8); // Restore 4 Hearts (+8 HP)
+                    updateHeartsUI();
+
+                    const item = inventory[selectedSlot];
+                    if (item) {
+                        item.count--;
+                        if (item.count <= 0) inventory[selectedSlot] = null;
+                        renderHotbarUI();
+                        selectSlot(selectedSlot);
+                    }
+                    logMessage("🍖 ステーキを食べた！ (❤️+4 回復)");
                 }
-                const swingPhase = Math.sin(player.swingProgress * Math.PI);
-                player.armRig.rotation.x = -swingPhase * 0.7;
-                player.armRig.rotation.y = -swingPhase * 0.5;
-                player.armRig.position.z = -swingPhase * 0.2;
             } else {
-                const isMoving = keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD'];
-                const bob = isMoving ? Math.sin(Date.now() * 0.01) * 0.02 : 0;
-                player.armRig.position.y = bob;
-                player.armRig.rotation.set(0, 0, 0);
+                // --- First-Person Sword Swing ---
+                if (player.attackCooldown > 0) {
+                    player.attackCooldown -= delta;
+                }
+
+                if (player.isSwinging) {
+                    player.swingProgress += delta * 7.5;
+                    if (player.swingProgress >= 1) {
+                        player.isSwinging = false;
+                        player.swingProgress = 0;
+                    }
+                    const swingPhase = Math.sin(player.swingProgress * Math.PI);
+                    player.armRig.rotation.x = -swingPhase * 0.7;
+                    player.armRig.rotation.y = -swingPhase * 0.5;
+                    player.armRig.position.z = -swingPhase * 0.2;
+                } else {
+                    const isMoving = keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD'];
+                    const bob = isMoving ? Math.sin(Date.now() * 0.01) * 0.02 : 0;
+                    player.armRig.position.y = bob;
+                    player.armRig.rotation.set(0, 0, 0);
+                }
             }
 
             updateAI(delta);
